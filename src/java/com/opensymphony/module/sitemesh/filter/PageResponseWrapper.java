@@ -5,9 +5,13 @@ package com.opensymphony.module.sitemesh.filter;
 
 import com.opensymphony.module.sitemesh.Page;
 import com.opensymphony.module.sitemesh.PageParserSelector;
+import com.opensymphony.module.sitemesh.RequestConstants;
 import com.opensymphony.module.sitemesh.SitemeshBuffer;
+import com.opensymphony.module.sitemesh.scalability.NoopScalabilitySupport;
+import com.opensymphony.module.sitemesh.scalability.ScalabilitySupport;
 
 import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
@@ -33,9 +37,25 @@ public class PageResponseWrapper extends HttpServletResponseWrapper {
     private Buffer buffer;
     private boolean aborted = false;
     private boolean parseablePage = false;
+    private final ScalabilitySupport scalabilitySupport;
+    private final HttpServletRequest request;
 
-    public PageResponseWrapper(final HttpServletResponse response, PageParserSelector parserSelector) {
+    public PageResponseWrapper(final HttpServletResponse response, final PageParserSelector parserSelector) {
+        this(response, null, new NoopScalabilitySupport(), parserSelector);
+    }
+
+    public PageResponseWrapper(final HttpServletResponse response, final HttpServletRequest request, final PageParserSelector parserSelector) {
+        this(response, request, new NoopScalabilitySupport(), parserSelector);
+    }
+
+    public PageResponseWrapper(final HttpServletResponse response, final ScalabilitySupport scalabilitySupport, final PageParserSelector parserSelector) {
+        this(response, null, scalabilitySupport, parserSelector);
+    }
+
+    public PageResponseWrapper(final HttpServletResponse response, final HttpServletRequest request, final ScalabilitySupport scalabilitySupport, final PageParserSelector parserSelector) {
         super(response);
+        this.request = request;
+        this.scalabilitySupport = scalabilitySupport;
         this.parserSelector = parserSelector;
 
         routablePrintWriter = new RoutablePrintWriter(new RoutablePrintWriter.DestinationFactory() {
@@ -74,18 +94,28 @@ public class PageResponseWrapper extends HttpServletResponseWrapper {
         if (parseablePage) {
             return; // already activated
         }
-        buffer = new Buffer(parserSelector.getPageParser(contentType), encoding);
+        buffer = new Buffer(parserSelector.getPageParser(contentType), encoding, scalabilitySupport);
         routablePrintWriter.updateDestination(new RoutablePrintWriter.DestinationFactory() {
-            public PrintWriter activateDestination() {
-                return buffer.getWriter();
+            public PrintWriter activateDestination() throws IOException {
+                return lazyDisable() ? getResponse().getWriter() : buffer.getWriter();
             }
         });
         routableServletOutputStream.updateDestination(new RoutableServletOutputStream.DestinationFactory() {
-            public ServletOutputStream create() {
-                return buffer.getOutputStream();
+            public ServletOutputStream create() throws IOException {
+                return lazyDisable() ? getResponse().getOutputStream() : buffer.getOutputStream();
             }
         });
         parseablePage = true;
+    }
+
+    private boolean lazyDisable() {
+        if (null != request && request.getAttribute(RequestConstants.DISABLE_BUFFER_AND_DECORATION) != null) {
+            parseablePage = false;
+            buffer = null;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     private void deactivateSiteMesh() {
@@ -192,5 +222,17 @@ public class PageResponseWrapper extends HttpServletResponseWrapper {
         } else {
             return buffer.getContents();
         }
+    }
+
+    public Buffer getBuffer() {
+        return buffer;
+    }
+
+    public boolean isAborted() {
+        return aborted;
+    }
+
+    public boolean isParseablePage() {
+        return parseablePage;
     }
 }

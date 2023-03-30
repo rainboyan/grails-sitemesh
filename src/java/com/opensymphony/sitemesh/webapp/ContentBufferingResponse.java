@@ -1,5 +1,6 @@
 package com.opensymphony.sitemesh.webapp;
 
+import com.opensymphony.module.sitemesh.scalability.ScalabilitySupport;
 import com.opensymphony.module.sitemesh.SitemeshBuffer;
 import com.opensymphony.module.sitemesh.filter.PageResponseWrapper;
 import com.opensymphony.module.sitemesh.PageParserSelector;
@@ -7,6 +8,7 @@ import com.opensymphony.module.sitemesh.PageParser;
 import com.opensymphony.sitemesh.ContentProcessor;
 import com.opensymphony.sitemesh.Content;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponseWrapper;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -24,8 +26,12 @@ public class ContentBufferingResponse extends HttpServletResponseWrapper {
     private final ContentProcessor contentProcessor;
     private final SiteMeshWebAppContext webAppContext;
 
-    public ContentBufferingResponse(HttpServletResponse response, final ContentProcessor contentProcessor, final SiteMeshWebAppContext webAppContext) {
-        super(new PageResponseWrapper(response, new PageParserSelector() {
+    public ContentBufferingResponse(HttpServletResponse response, final ContentProcessor contentProcessor, final SiteMeshWebAppContext webAppContext, final ScalabilitySupport scalabilitySupport) {
+        this(response, null, contentProcessor, webAppContext, scalabilitySupport);
+    }
+
+    public ContentBufferingResponse(HttpServletResponse response, HttpServletRequest request, final ContentProcessor contentProcessor, final SiteMeshWebAppContext webAppContext, final ScalabilitySupport scalabilitySupport) {
+        super(new PageResponseWrapper(response, request,  scalabilitySupport, new PageParserSelector() {
             public boolean shouldParsePage(String contentType) {
                 return contentProcessor.handles(contentType);
             }
@@ -43,6 +49,14 @@ public class ContentBufferingResponse extends HttpServletResponseWrapper {
         this.contentProcessor = contentProcessor;
         this.webAppContext = webAppContext;
         pageResponseWrapper = (PageResponseWrapper) getResponse();
+
+        // We can't guarantee that response.setContentType will not be
+        // called before this constructor, so we must check the type now.
+        String existingContentType = response.getContentType();
+        if (existingContentType != null)
+        {
+            pageResponseWrapper.setContentType(existingContentType);
+        }
     }
 
     public boolean isUsingStream() {

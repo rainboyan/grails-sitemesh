@@ -1,9 +1,11 @@
 package com.opensymphony.module.sitemesh.parser;
 
-import java.io.IOException;
-import java.util.*;
-
 import com.opensymphony.module.sitemesh.*;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Page parser that doesn't parse the full page, but rather just parses the head section of the page.
@@ -12,7 +14,8 @@ import com.opensymphony.module.sitemesh.*;
  */
 public class PartialPageParser implements PageParser
 {
-    public Page parse(char[] buffer) throws IOException {
+    public Page parse(char[] buffer) throws IOException
+    {
         return parse(new DefaultSitemeshBuffer(buffer));
     }
 
@@ -38,16 +41,17 @@ public class PartialPageParser implements PageParser
                 else
                 {
                     // The whole thing is the body.
-                    return new PartialPageParserHtmlPage(buffer, new SitemeshBufferFragment(buffer, 0, length), null);
+                    return new PartialPageParserHtmlPage(buffer);
                 }
             }
         }
         // If we're here, we mustn't have found a tag
-        return new PartialPageParserHtmlPage(buffer, new SitemeshBufferFragment(buffer, 0, length), null);
+        return new PartialPageParserHtmlPage(buffer);
     }
 
     private Page parseHtmlPage(SitemeshBuffer buffer, int position)
     {
+
         char[] data = buffer.getCharArray();
         int length = buffer.getBufferLength();
         int bodyStart = -1;
@@ -65,7 +69,7 @@ public class PartialPageParser implements PageParser
                     position = findEndOf(data, length, position + 4, ">");
                     headStart = position;
                     // Find end of head
-                    position = findStartOf(data, length, position, "</head>");
+                    position = findEndTag(position, data, length, "head");
                     headLength = position - headStart;
                     position += 7;
                 }
@@ -165,6 +169,35 @@ public class PartialPageParser implements PageParser
         }
     }
 
+    private int findEndTag(final int position, final char[] data, final int dataEnd, final String tagName)
+    {
+        String endTag = "</" + tagName + ">";
+        final int remainingTagLength = endTag.length() - 1;
+        int i = position;
+        while (i < dataEnd - remainingTagLength)
+        {
+            // quickly search for closing tag markers
+            if(data[i] == '<')
+            {
+                if (data[i + remainingTagLength] == '>')
+                {
+                    if (data[i + 1] == '/')
+                    {
+                        if (compareLowerCase(data, dataEnd, i, endTag))
+                        {
+                            return i;
+                        }
+                    }
+                    // Because we found a complete tag but we know it is not what we are looking for,
+                    // we can just jump over this tag.
+                    i += remainingTagLength;
+                }
+            }
+            i++;
+        }
+        return dataEnd;
+    }
+
     private static boolean compareLowerCase(final char[] data, final int dataEnd, int position, String token)
     {
         int l = position + token.length();
@@ -177,12 +210,17 @@ public class PartialPageParser implements PageParser
             // | 32 converts from ASCII uppercase to ASCII lowercase
             char potential = data[position + i];
             char needed = token.charAt(i);
-            if ((Character.isLetter(potential) && (potential | 32) != needed) || potential != needed)
+            if (isUpperCaseAscii(potential) ? (potential | 32) != needed : potential != needed)
             {
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean isUpperCaseAscii(char c)
+    {
+        return c >= 'A' && c <= 'Z';
     }
 
     private static int findEndOf(final char[] data, final int dataEnd, int position, String token)
@@ -212,11 +250,10 @@ public class PartialPageParser implements PageParser
     /**
      * Parse the properties of the current tag
      *
-     * @param data the data
-     * @param dataEnd the end index of the data
+     * @param data     the data
+     * @param dataEnd  the end index of the data
      * @param position our position in the data, this should be the first character after the tag name
-     * @param map to the map to parse the properties into
-     *
+     * @param map      to the map to parse the properties into
      * @return The position of the first character after the tag
      */
     private static int parseProperties(char[] data, int dataEnd, int position, SimpleMap map)
