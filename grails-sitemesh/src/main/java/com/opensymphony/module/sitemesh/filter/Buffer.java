@@ -76,7 +76,6 @@ public class Buffer {
 
                 @Override
                 public void setWriteListener(WriteListener writeListener) {
-
                 }
 
                 public void write(int b) {
@@ -90,4 +89,6 @@ public class Buffer {
     public boolean isUsingStream() {
         return bufferedStream != null;
     }
+
+
 }
