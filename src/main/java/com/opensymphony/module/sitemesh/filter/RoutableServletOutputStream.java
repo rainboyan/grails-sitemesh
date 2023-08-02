@@ -112,16 +112,6 @@ public class RoutableServletOutputStream extends ServletOutputStream {
         getDestination().println(v);
     }
 
-    @Override
-    public boolean isReady() {
-        return false;
-    }
-
-    @Override
-    public void setWriteListener(WriteListener writeListener) {
-
-    }
-
     public void write(byte b[]) throws IOException {
         getDestination().write(b);
     }
@@ -132,5 +122,24 @@ public class RoutableServletOutputStream extends ServletOutputStream {
 
     public void flush() throws IOException {
         getDestination().flush();
+    }
+
+    @Override
+    public boolean isReady() {
+        try {
+            return getDestination().isReady();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public void setWriteListener(WriteListener writeListener) {
+        try {
+            getDestination().setWriteListener(writeListener);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
